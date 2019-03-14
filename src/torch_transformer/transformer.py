@@ -72,6 +72,11 @@ class SublayerConnection(nn.Module):
         self.norm = LayerNorm(size) # Could use nn.LayerNorm
         self.dropout = nn.Dropout(dropout)
 
+    def forward(self, x, sublayer):
+        # Apply residual connection to a sublayer with the same size
+        return x + self.dropout(sublayer(self.norm(x)))
+
+
 
 class Encoder(nn.Module):
     """
@@ -91,8 +96,62 @@ class Encoder(nn.Module):
         return self.norm(x)
 
 
+class EncoderLayer(nn.Module):
+    """
+    Self-attentive feed forward encoder
+    """
+    def __init__(self, size, self_attn, feed_forward, dropout):
+        super(EncoderLayer, self).__init__()
+        self.size = size
+        self.self_attn = self_attn
+        self.feed_forward = feed_forward
+        # Each layer has two sub-layers. The first is a multi-head
+        # self-attention mechanism, and the second is a simple, position-wise
+        # fully connected feed- forward network.
+        self.sublayer = clone_layers(SublayerConnection(size, dropout), 2)
+    
+    def forward(self, x, mask):
+        """
+        input goes through self attention layer and then a feed forward network
+        """
+        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
+        return self.sublayer[1](x, self.feed_forward)
+
+
 class Decoder(nn.Module):
-    def __init__(self):
+    """
+    Create decoder with a stack of `num_layers` with masking
+    """
+    def __init__(self, layer, num_layers=1):
         super(Decoder, self).__init__()
+        self.layers = clone_layers(layer, num_layers)
+        self.norm = LayerNorm(layer.size)
+
+    def forward(self, x, memory, src_mask, tgt_mask):
+        for layer in self.layers:
+            x = layer(x, memory, src_mask, tgt_mask)
+        return self.norm(x)
 
 
+class DecoderLayer(nn.Module):
+    """
+    Self-attentive and Source(Encoder) Attentive feed forward decoder
+    """
+    def __init__(self, size, self_attn, src_attn, feed_forward, dropout):
+        super(DecoderLayer, self).__init__()
+        self.size = size
+        self.self_attn = self_attn
+        self.src_attn = src_attn
+        self.feed_forward = feed_forward
+        # Each layer has three sub-layers. The first is a multi-head
+        # self-attention mechanism, and the second is a source attention layer with all the layers of the encoder
+        # and the third is a simple, position-wise fully connected feed- forward network.
+        self.sublayer = clone_layers(SublayerConnection(size, dropout), 3)
+    
+    def forward(self, x, memory, src_mask, tgt_mask):
+        """
+        input goes through self attention layer and then a source attention layer and then finally a feed forward network
+        """
+        x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, tgt_mask))
+        x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, src_mask))
+        return self.sublayer[2](x, self.feed_forward)
