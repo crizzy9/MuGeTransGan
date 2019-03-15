@@ -3,9 +3,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math, copy, time
-import matplotlib.pyplot as plt
-import seaborn
+# import math, copy, time
+# import matplotlib.pyplot as plt
+# import seaborn
 from helpers import clone_layers
 
 # Implementation of Transformer as per Attention is all you need paper.
@@ -74,7 +74,7 @@ class SublayerConnection(nn.Module):
 
     def forward(self, x, sublayer):
         # Apply residual connection to a sublayer with the same size
-        return x + self.dropout(sublayer(self.norm(x)))
+        return x + self.dropout(sublayer(self.norm(x))) # why take normalized sublayer when encoder layers are already normalized?
 
 
 
