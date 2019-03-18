@@ -32,7 +32,7 @@ class MultiTrackPianoRollDataset(Dataset):
     def __getitem__(self, idx):
         
         sample = self.piano_rolls[idx]
-        sample = pypianoroll.Multitrack(piano_roll_file)
+        sample = pypianoroll.Multitrack(sample)
         
         if self.transform:
             sample = self.transform(sample)
