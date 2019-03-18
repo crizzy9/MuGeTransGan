@@ -155,3 +155,20 @@ class DecoderLayer(nn.Module):
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, tgt_mask))
         x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, src_mask))
         return self.sublayer[2](x, self.feed_forward)
+
+
+class PositionwiseFeedForward(nn.Module):
+    """
+    Implement Feed Forward Network in each layer of encoder and decoder stack
+    with 2 linear layers and a relu in between
+    FFN(x) = max(0, xW_1 + b_1)W_2 + b_2
+    """
+    def __init__(self, d_model, d_ff, dropout=0.1):
+        super(PositionwiseFeedForward, self).__init__()
+        self.w_1 = nn.Linear(d_model, d_ff)
+        self.w_2 = nn.Linear(d_ff, d_model)
+        self.dropout = nn.Dropout(p=dropout)
+
+    def forward(self, x):
+        return self.w_2(self.dropout(F.relu(self.w_1(x))))
+
