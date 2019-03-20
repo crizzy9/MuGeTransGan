@@ -1,10 +1,11 @@
 # Transformer implementation in PyTorch
+import  math
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from helpers import clone_layers
+from modules import clone_layers
 
 # Implementation of Transformer as per Attention is all you need paper.
 
@@ -25,13 +26,16 @@ class EncoderDecoder(nn.Module):
         """
         Process masked source and target sequences
         """
+        print("ed forward")
         return self.decode(self.encode(src,  src_mask), src_mask, tgt, tgt_mask)
 
     def encode(self, src, src_mask):
+        print("ed enc")
         return self.encoder(self.src_embed(src), src_mask)
 
-    def deocode(self, memory, src_mask, tgt, tgt_mask):
-        return self.deoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask)
+    def decode(self, memory, src_mask, tgt, tgt_mask):
+        print("ed dec")
+        return self.decoder(self.tgt_embed(tgt), memory, src_mask, tgt_mask)
 
 
 class Generator(nn.Module):
@@ -89,6 +93,7 @@ class Encoder(nn.Module):
         """
         Process input and mask through all the layers
         """
+        print("e for")
         for layer in self.layers:
             x = layer(x, mask)
         return self.norm(x)
@@ -113,6 +118,7 @@ class EncoderLayer(nn.Module):
         input goes through self attention layer and then a feed forward network
         """
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, mask))
+        print("enc layer", x)
         return self.sublayer[1](x, self.feed_forward)
 
 
@@ -126,6 +132,7 @@ class Decoder(nn.Module):
         self.norm = LayerNorm(layer.size)
 
     def forward(self, x, memory, src_mask, tgt_mask):
+        print("d for")
         for layer in self.layers:
             x = layer(x, memory, src_mask, tgt_mask)
         return self.norm(x)
@@ -150,8 +157,10 @@ class DecoderLayer(nn.Module):
         """
         input goes through self attention layer and then a source attention layer and then finally a feed forward network
         """
+        m = memory
         x = self.sublayer[0](x, lambda x: self.self_attn(x, x, x, tgt_mask))
         x = self.sublayer[1](x, lambda x: self.src_attn(x, m, m, src_mask))
+        print("dec layer", x)
         return self.sublayer[2](x, self.feed_forward)
 
 
@@ -197,9 +206,14 @@ class MultiHeadAttention(nn.Module):
         by a compatibility function of the query with the corresponding key
         """
         d_k = query.size(-1)
+        print("sdpa", d_k)
         scores = torch.matmul(query, key.transpose(-2, -1)) / math.sqrt(d_k)
+        # print(scores.size())
+        # scores.unsqueeze_(1)
+        # print(scores.size())
         if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9) # ??? -1e9
+            # print(mask.size())
+            scores = scores.masked_fill_(mask == 0, -1e9) # ??? -1e9
 
         p_attn = F.softmax(scores, dim=-1)
         if dropout is not  None:
@@ -220,7 +234,7 @@ class MultiHeadAttention(nn.Module):
         # performing all the linear projections in batch from d_model => h x d_k 
         # zip will only zip the first 3 linear layers and leave the last
         query, key, value = [l(x).view(n_batches, -1, self.h, self.d_k).transpose(1, 2)
-                for l, x in zip(self.layers, (query, key, value))]
+                for l, x in zip(self.linears, (query, key, value))]
 
         # Apply attention on all projected vectors in the batch
         x, self.attn = self.scaled_dot_product_attention(query, key, value, mask=mask, dropout=self.dropout)
@@ -228,6 +242,11 @@ class MultiHeadAttention(nn.Module):
         # Concatenate and apply final layer
         # Why concat on x?
         x = x.transpose(1, 2).contiguous().view(n_batches, -1, self.h, self.d_k)
+        # print(x.size())
+        x = x.view(1, x.size(1), -1)
+        # print(x.size())
+        print("ma for")
+
         return self.linears[-1](x)
 
 
@@ -239,13 +258,13 @@ class Embeddings(nn.Module):
     and the pre-softmax linear transformation??
     """
     def __init__(self, d_model, vocab):
-        super(PositionwiseFeedForward, self).__init__()
+        super(Embeddings, self).__init__()
         self.embedding = nn.Embedding(vocab, d_model)
         self.d_model = d_model
 
     def forward(self, x):
         # in embedding layer weights are multiplied by sqrt(d_model)
-        self.embedding(x) * math.sqrt(self.d_model)
+        return self.embedding(x) * math.sqrt(self.d_model)
 
 
 class PositionalEncoding(nn.Module):
